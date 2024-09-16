@@ -1,2 +1,4 @@
 #ignorando o .env
 .env
+#ignorando o venv
+venv

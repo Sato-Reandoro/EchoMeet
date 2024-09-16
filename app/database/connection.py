@@ -11,7 +11,6 @@ load_dotenv()
 # Pegar a URL do banco de dados do .env
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Configuração do SQLAlchemy
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -24,5 +23,7 @@ def get_db():
         db.close()
 
 def init_db():
-    import app.models  
-    Base.metadata.create_all(bind=engine) 
+    import app.models.summary
+    import app.models.group
+    import app.models.user
+    Base.metadata.create_all(bind=engine)  # Cria todas as tabelas no banco de dados

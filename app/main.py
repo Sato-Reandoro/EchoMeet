@@ -1,13 +1,20 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from app.database.connection import init_db
+from fastapi import Depends, FastAPI
+from requests import Session
+from app.api.summary.summary import salvar_resumo_no_banco
+from app.database.connection import SessionLocal, get_db, init_db
+from app.schemas.summary import SummaryCreate
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Executa a inicialização do banco de dados na inicialização da aplicação
+
+app = FastAPI()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.on_event("startup")
+def on_startup():
     init_db()
-    yield
-    # Aqui você pode adicionar qualquer código que deve ser executado no final
 
-# Inicializa a aplicação FastAPI com o evento lifespan
-app = FastAPI(lifespan=lifespan)

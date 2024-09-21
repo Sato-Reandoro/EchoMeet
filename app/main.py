@@ -1,15 +1,20 @@
-from fastapi import Depends, FastAPI, HTTPException, Query
+from datetime import timedelta
+from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from app.api.crud import crud_user
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
 from app.api.summary.summary import salvar_resumo_no_banco
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models.summary import Summary
+from app.schemas import schemas_user
 from app.schemas.summary import SummaryCreate
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from app.database.connection import SessionLocal, init_db
 from app.api.crud.group import create_group, get_groups, delete_group
 from app.schemas.group import GroupCreate
+from app.utils import auth
 
 
 app = FastAPI()
@@ -24,6 +29,32 @@ def get_db():
 @app.on_event("startup")
 def on_startup():
     init_db()
+    
+    
+@app.post("/users", response_model=schemas_user.User)
+def create_user(user_in: schemas_user.UserCreate, db: Session = Depends(get_db)):
+    return crud_user.create_user(db, user_in)
+
+@app.post("/login")
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+):
+    user = auth.authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="nome de usuário ou senha incorretos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user_type = user.user_type  # Ajuste conforme necessário para obter o tipo de usuário
+    user_id = user.id  # Supondo que o ID do usuário está armazenado no atributo 'id'
+    
+    acesso_token = auth.create_access_token(
+        data={"sub": user.email, "user_type": user_type}, expires_delta=timedelta(minutes=15)
+    )
+    
+    return {"access_token": acesso_token, "user_type": user_type, "user_id": user_id}
 
 
 @app.post("/summaries/")

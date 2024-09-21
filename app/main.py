@@ -1,4 +1,3 @@
-import json
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
@@ -65,6 +64,7 @@ def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Quer
         return {"message": "Gráficos gerados com sucesso para as métricas fornecidas."}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
 @app.post("/groups/")
 def create_new_group(group: GroupCreate, db: Session = Depends(get_db)):
     return create_group(db=db, group=group)

@@ -10,4 +10,4 @@ class SummaryResponse(SummaryCreate):
     summary_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True

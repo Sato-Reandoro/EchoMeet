@@ -30,3 +30,32 @@ def create_user(db: Session, user: schemas_user.UserCreate):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+def get_user_by_id(db: Session, user_id: int):
+    return db.query(models_user.User).filter(models_user.User.id == user_id).first()
+
+def get_all_users(db: Session, skip: int = 0, limit: int = 10):
+    return db.query(models_user.User).offset(skip).limit(limit).all()
+
+def update_user(db: Session, user_id: int, user_in: schemas_user.UserUptade):
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_data = user_in.model_dump(exclude_unset=True)
+    for key, value in user_data.items():
+        setattr(user, key, value)
+    
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+def delete_user(db: Session, user_id: int):
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db.delete(user)
+    db.commit()
+    return user

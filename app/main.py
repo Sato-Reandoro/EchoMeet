@@ -1,5 +1,6 @@
 from datetime import timedelta
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from typing import List
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api.crud import crud_user
@@ -108,3 +109,39 @@ def read_groups(db: Session = Depends(get_db)):
 def delete_existing_group(group_id: int, db: Session = Depends(get_db)):
     delete_group(db=db, group_id=group_id)
     return {"msg": "Grupo Deletado!"}
+
+
+# Rota para listar todos os usuários
+@app.get("/users", response_model=List[schemas_user.User])
+def read_users(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    return crud_user.get_all_users(db, skip=skip, limit=limit)
+
+# Rota para obter um usuário pelo ID
+@app.get("/users/{user_id}", response_model=schemas_user.User)
+def read_user(
+    user_id: int = Path(..., title="The ID of the user to retrieve"),
+    db: Session = Depends(get_db)
+):
+    user = crud_user.get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+# Rota para atualizar as informações de um usuário pelo ID
+@app.put("/users/{user_id}", response_model=schemas_user.User)
+def update_user(
+    user_id: int,
+    user_in: schemas_user.UserUptade,
+    db: Session = Depends(get_db)
+):
+    updated_user = crud_user.update_user(db, user_id, user_in)
+    return updated_user
+
+# Rota para excluir um usuário pelo ID
+@app.delete("/users/{user_id}", response_model=schemas_user.User)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    deleted_user = crud_user.delete_user(db, user_id)
+    return deleted_user

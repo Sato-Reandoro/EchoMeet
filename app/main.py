@@ -10,11 +10,12 @@ from app.database.connection import SessionLocal, get_db, init_db
 from app.models.summary import Summary
 from app.schemas import schemas_user
 from app.schemas.summary import SummaryCreate
+from app.schemas.schemas_user import EmailCheck
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from app.database.connection import SessionLocal, init_db
-from app.api.crud.group import create_group, get_groups, delete_group
-from app.schemas.group import GroupCreate
+from app.api.crud.group import create_group, get_groups, delete_group, delete_email_from_group, get_emails_by_group, get_group_by_name, find_email_in_group
+from app.schemas.group import GroupCreate, GroupEmailDelete, Group, GroupEmailSearch
 from app.utils import auth
 
 
@@ -96,15 +97,48 @@ def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Quer
         return {"message": "Gráficos gerados com sucesso para as métricas fornecidas."}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
-@app.post("/groups/")
+
+# rota verificar se o email consta no sistema
+@app.post("/check-email/")
+def check_email(email_data: EmailCheck, db: Session = Depends(get_db)):
+    email = email_data.email
+    user = crud_user.get_user_by_email(db, email)
+    if not user:
+        raise HTTPException(status_code=404, detail="E-mail não encontrado")
+    return {"message": "E-mail válido e existente no sistema."}
+
+# Rota para procurar um email específico dentro de um grupo via corpo da requisição
+@app.post("/groups/search-email/")
+def find_email_in_group_api(email_search: GroupEmailSearch, db: Session = Depends(get_db)):
+    return find_email_in_group(db, email_search.group_id, email_search.email)
+
+
+#Rota lista de emails de um grupo
+@app.get("/groups/{group_id}/emails", response_model=dict)
+def get_group_emails(group_id: int, db: Session = Depends(get_db)):
+    return get_emails_by_group(db, group_id)
+
+#Rota que remove email de um grupo
+@app.delete("/groups/delete-email/")
+def remove_email_from_group(data: GroupEmailDelete, db: Session = Depends(get_db)):
+    return delete_email_from_group(db=db, group_id=data.group_id, email=data.email)
+
+#Rota de criação de grupo
+@app.post("/groups_create/")
 def create_new_group(group: GroupCreate, db: Session = Depends(get_db)):
     return create_group(db=db, group=group)
 
-@app.get("/groups/")
+# Rota para obter um grupo pelo nome
+@app.get("/groups/name/{group_name}", response_model=Group)
+def read_group_by_name(group_name: str, db: Session = Depends(get_db)):
+    return get_group_by_name(db=db, group_name=group_name)
+
+#Rota para obter todos os grupos
+@app.get("/groups/", response_model=List[Group])
 def read_groups(db: Session = Depends(get_db)):
     return get_groups(db)
 
+#Rota para deletar um grupo pelo id 
 @app.delete("/groups/{group_id}")
 def delete_existing_group(group_id: int, db: Session = Depends(get_db)):
     delete_group(db=db, group_id=group_id)
@@ -115,7 +149,7 @@ def delete_existing_group(group_id: int, db: Session = Depends(get_db)):
 @app.get("/users", response_model=List[schemas_user.User])
 def read_users(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     return crud_user.get_all_users(db, skip=skip, limit=limit)
-
+    
 # Rota para obter um usuário pelo ID
 @app.get("/users/{user_id}", response_model=schemas_user.User)
 def read_user(

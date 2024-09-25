@@ -18,3 +18,6 @@ class UserUptade(UserBase):
 class User(UserBase):
     id: int
     user_type: str
+
+class EmailCheck(BaseModel):
+    email: EmailStr

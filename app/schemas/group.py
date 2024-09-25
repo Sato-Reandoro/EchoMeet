@@ -20,3 +20,11 @@ class Group(GroupBase):
 
     class Config:
         from_attributes = True
+
+class GroupEmailDelete(BaseModel):
+    group_id: int
+    email: str
+
+class GroupEmailSearch(BaseModel):
+    group_id: int
+    email: str

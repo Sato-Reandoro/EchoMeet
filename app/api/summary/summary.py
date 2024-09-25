@@ -7,6 +7,7 @@ from app.models.summary import Summary
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage
 
+
 load_dotenv()
 chave_openai = os.getenv("OPENAI_API_KEY")
 

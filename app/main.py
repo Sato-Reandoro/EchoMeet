@@ -7,6 +7,7 @@ from app.api.crud import crud_user
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
 from app.api.summary.summary import salvar_resumo_no_banco
 from app.database.connection import SessionLocal, get_db, init_db
+from app.models import models_user
 from app.models.summary import Summary
 from app.schemas import schemas_user
 from app.schemas.summary import SummaryCreate
@@ -34,12 +35,13 @@ def on_startup():
     
     
 @app.post("/users", response_model=schemas_user.User)
-def create_user(user_in: schemas_user.UserCreate, db: Session = Depends(get_db)):
+def create_user(user_in: schemas_user.UserCreate, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     return crud_user.create_user(db, user_in)
 
 @app.post("/login")
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
 ):
     user = auth.authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -49,14 +51,16 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user_type = user.user_type  # Ajuste conforme necessário para obter o tipo de usuário
-    user_id = user.id  # Supondo que o ID do usuário está armazenado no atributo 'id'
+    user_type = user.user_type
+    user_id = user.id
     
-    acesso_token = auth.create_access_token(
-        data={"sub": user.email, "user_type": user_type}, expires_delta=timedelta(minutes=15)
+    access_token = auth.create_access_token(
+        data={"sub": user.email, "user_type": user_type},
+        expires_delta=timedelta(minutes=15)
     )
     
-    return {"access_token": acesso_token, "user_type": user_type, "user_id": user_id}
+    return {"access_token": access_token, "user_type": user_type, "user_id": user_id}
+
 
 
 @app.post("/summaries/")
@@ -65,12 +69,13 @@ def criar_resumo(
     db: Session = Depends(get_db)
 ):
     try:
-        # Dividir o parâmetro 'nome' em nome_grupo e nome_audio
         nome_grupo, nome_audio = summary.nome.split(maxsplit=1)
     except ValueError:
         raise HTTPException(status_code=400, detail="O campo 'nome' deve conter nome do grupo e nome do áudio separados por espaço.")
     
     return salvar_resumo_no_banco(summary, db, nome_grupo, nome_audio)
+
+
 
 @app.get("/dashboard-options/{summary_id}")
 def get_dashboard_options_api(summary_id: int, db: Session = Depends(get_db)):

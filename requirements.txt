@@ -1,3 +1,11 @@
-Fastapi
 python-dotenv
-google-generativeai
+sqlalchemy
+SQLAlchemy
+langchain-openai
+pandas
+plotly
+fastapi
+pydantic
+python-jose
+passlib
+uvicorn

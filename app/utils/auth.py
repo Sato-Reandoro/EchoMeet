@@ -2,12 +2,14 @@ import datetime
 import os
 from typing import Optional
 from dotenv import load_dotenv
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 
+from app.database.connection import get_db
 from app.models import models_user
 
 # Carregar variáveis do .env
@@ -17,6 +19,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES= 30
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -47,8 +50,41 @@ def decode_token(token: str):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except JWTError:
-         raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED, 
-        detail ="credenciais não são validas",
-        headers ={"WWW-Authenticate": "Bearer"},
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="credenciais não são válidas",
+            headers={"WWW-Authenticate": "Bearer"},
         )
+        
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="suas credenciais não são validas",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = decode_token(token)  # Use decode_token aqui
+        user = db.query(models_user.User).filter(models_user.User.email == payload.get("sub")).first()
+        if user is None:
+            raise credentials_exception
+    except Exception:
+        raise credentials_exception
+    
+    return user
+
+
+def admin_user(
+    token: str = Depends(oauth2_scheme), 
+    db: Session = Depends(get_db)
+):
+    # Reutilizar a função para obter o usuário atual
+    current_user = get_current_user(token, db)
+    
+    if current_user.user_type != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário não tem privilégios de administrador.",
+        )
+    
+    return current_user

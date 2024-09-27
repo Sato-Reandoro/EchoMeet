@@ -1,25 +1,23 @@
 from datetime import timedelta
 from typing import List
-from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api.crud import crud_user
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
 from app.api.summary.summary import salvar_resumo_no_banco
-from app.api.transcription.audio import definir_caminho_arquivo, salvar_no_diretorio, verificar_audio
 from app.api.transcription.transcription import remover_arquivo_temporario, salvar_arquivo_temporario, transcrever_audio
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models import models_user
-from app.models.summary import Summary
 from app.schemas import schemas_user
-from app.schemas.summary import SummaryCreate
 from app.schemas.schemas_user import EmailCheck
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from app.database.connection import SessionLocal, init_db
 from app.api.crud.group import create_group, get_groups, delete_group, delete_email_from_group, get_emails_by_group, get_group_by_name, find_email_in_group
 from app.schemas.group import GroupCreate, GroupEmailDelete, Group, GroupEmailSearch
+from app.schemas.summary import SummaryData
 from app.utils import auth
 
 
@@ -64,24 +62,32 @@ async def login_for_access_token(
     
     return {"access_token": access_token, "user_type": user_type, "user_id": user_id}
 
-
-
 @app.post("/summaries/")
-def criar_resumo(
-    summary: SummaryCreate, 
-    db: Session = Depends(get_db)
+async def criar_resumo(
+    summary_data: SummaryData,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(auth.get_current_user_id)  # Obtém o user_id
 ):
+    # Extrai os valores do nome
     try:
-        nome_grupo, nome_audio = summary.nome.split(maxsplit=1)
+        nome_grupo, nome_audio = summary_data.nome.split(" ", 1)
+        meeting_name = nome_audio  # Define meeting_name a partir de nome_audio
     except ValueError:
-        raise HTTPException(status_code=400, detail="O campo 'nome' deve conter nome do grupo e nome do áudio separados por espaço.")
-    
-    return salvar_resumo_no_banco(summary, db, nome_grupo, nome_audio)
+        raise HTTPException(status_code=400, detail="O nome deve conter pelo menos um espaço.")
+
+    # Chama a função para salvar o resumo no banco
+    resultado = salvar_resumo_no_banco(db, summary_data.nome, user_id, meeting_name)
+
+    # Verifica se o resultado é um dicionário e se contém um erro
+    if isinstance(resultado, dict) and "erro" in resultado:
+        raise HTTPException(status_code=404, detail=resultado["erro"])
+
+    return {"message": "Resumo salvo com sucesso!", "summary": resultado}
 
 
 
 @app.get("/dashboard-options/{summary_id}")
-def get_dashboard_options_api(summary_id: int, db: Session = Depends(get_db)):
+def get_dashboard_options_api(summary_id: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.get_current_user)):
     try:
         options = get_dashboard_options(db, summary_id)
         return options
@@ -90,7 +96,7 @@ def get_dashboard_options_api(summary_id: int, db: Session = Depends(get_db)):
 
 # Endpoint para gerar um gráfico com base no tipo de valor (numérico ou percentual)
 @app.get("/generate-dashboard/{summary_id}/{value_type}")
-def generate_dashboard_api(summary_id: int, value_type: str, db: Session = Depends(get_db)):
+def generate_dashboard_api(summary_id: int, value_type: str, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.get_current_user)):
     try:
         generate_dashboard_by_type(db, summary_id, value_type)
         return {"message": f"Gráfico de tipo '{value_type}' gerado com sucesso."}
@@ -99,7 +105,7 @@ def generate_dashboard_api(summary_id: int, value_type: str, db: Session = Depen
 
 # Novo endpoint para gerar gráficos a partir de várias métricas
 @app.get("/generate-dashboard-by-metrics/{summary_id}")
-def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Query(...), db: Session = Depends(get_db)):
+def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Query(...), db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.get_current_user)):
     try:
         generate_dashboards_for_metrics(db, summary_id, metrics)
         return {"message": "Gráficos gerados com sucesso para as métricas fornecidas."}
@@ -155,14 +161,15 @@ def delete_existing_group(group_id: int, db: Session = Depends(get_db)):
 
 # Rota para listar todos os usuários
 @app.get("/users", response_model=List[schemas_user.User])
-def read_users(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+def read_users(skip: int = 0, limit: int = 10, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     return crud_user.get_all_users(db, skip=skip, limit=limit)
     
 # Rota para obter um usuário pelo ID
 @app.get("/users/{user_id}", response_model=schemas_user.User)
 def read_user(
     user_id: int = Path(..., title="The ID of the user to retrieve"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models_user.User = Depends(auth.admin_user)  # Adicionando a verificação de admin
 ):
     user = crud_user.get_user_by_id(db, user_id)
     if user is None:
@@ -174,7 +181,8 @@ def read_user(
 def update_user(
     user_id: int,
     user_in: schemas_user.UserUptade,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models_user.User = Depends(auth.admin_user)  # Adicionando a verificação de admin
 ):
     updated_user = crud_user.update_user(db, user_id, user_in)
     return updated_user
@@ -183,13 +191,14 @@ def update_user(
 @app.delete("/users/{user_id}", response_model=schemas_user.User)
 def delete_user(
     user_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models_user.User = Depends(auth.admin_user)  # Adicionando a verificação de admin
 ):
     deleted_user = crud_user.delete_user(db, user_id)
     return deleted_user
 
 @app.post("/transcrever-audio/")
-async def transcrever_audio_endpoint(nome_grupo: str, file: UploadFile = File(...)):
+async def transcrever_audio_endpoint(nome_grupo: str = Form(...), file: UploadFile = File(...), current_user: models_user.User = Depends(auth.get_current_user)):
     """Endpoint para transcrever áudio enviado e retornar a transcrição."""
     # Salvar o arquivo de áudio temporariamente
     file_location = salvar_arquivo_temporario(file)

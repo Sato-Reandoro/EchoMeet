@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 from app.models.summary import Summary
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage
-
+from app.schemas.summary import SummaryData
 
 load_dotenv()
 chave_openai = os.getenv("OPENAI_API_KEY")
 
 def concatenar_nome_arquivo(nome_grupo: str, nome_audio: str) -> str:
+    # Garantir que a extensão .txt seja adicionada apenas uma vez
+    nome_audio = nome_audio.rstrip('.txt')  # Remove .txt se estiver presente
     return f"{nome_grupo} {nome_audio}.txt"
 
 def construir_caminho_arquivo(nome_arquivo: str, pasta: str = "D:/programação/github/EchoMeet/app/api/transcription/pasta_de_transcrições") -> str:
@@ -50,8 +52,15 @@ def identificar_dados(texto: str):
     if not texto.strip():
         return []
     
-    mensagem = HumanMessage(content=f"Você é um assistente de IA projetado para analisar discussões de reuniões. Sua tarefa é revisar o texto abaixo e identificar dados relevantes, como números, métricas, datas ou qualquer outro tipo de informação mensurável. Cada item deve ser apresentado no formato: 'Tipo de Dado: [tipo], Valor: [valor]', especifique o tipo de dado que irá sair, se for faturamento, seria faturamento do que? E caso um valor esteja escrito como exemplo'500 milhões' você deve escrever o numero em algarismos assim passando de '500 milhões' para '500.000.000'. Aqui está o texto:\n\n{texto}")
-    
+    mensagem = HumanMessage(content=f"""
+    Você é um assistente de IA especializado em analisar discussões de reuniões. Sua tarefa é revisar o texto abaixo e identificar informações relevantes que contenham números, métricas, datas, valores monetários ou qualquer outro dado mensurável. Cada dado deve ser classificado com clareza, no formato 'Tipo de Dado: [tipo], Valor: [valor]'. Certifique-se de:
+    1. Converter números por extenso, como '500 milhões', para sua forma numérica '500.000.000'.
+    2. Especificar o tipo de dado, como por exemplo 'Faturamento anual' em vez de apenas 'Faturamento'.
+    3. Se não encontrar nenhum dado relevante, retorne apenas a mensagem 'Nenhum dado foi encontrado'.
+
+    Aqui está o texto para análise:\n\n{texto}
+    """)
+
     resposta = llm.invoke([mensagem])
     
     # Debug: Verifique a resposta do LLM
@@ -65,8 +74,6 @@ def identificar_dados(texto: str):
     dados_identificados = [{"tipo": tipo.strip(), "valor": valor.strip()} for tipo, valor in matches]
     
     return dados_identificados
-
-
 
 def processar_dados(dados: str):
     # Converte a string JSON em um objeto Python
@@ -95,11 +102,10 @@ def remover_duplicatas(dados: list) -> list:
     
     return dados_unicos
 
-
-def criar_resumo_model(summary_data, resumo_gerado: str, dados_dashboard: str) -> Summary:
+def criar_resumo_model(user_id: int, meeting_name: str, resumo_gerado: str, dados_dashboard: str) -> Summary:
     return Summary(
-        user_id=summary_data.user_id,
-        meeting_name=summary_data.meeting_name,
+        user_id=user_id,
+        meeting_name=meeting_name,
         summary_text=resumo_gerado,
         dashboard_data=dados_dashboard
     )
@@ -110,19 +116,25 @@ def salvar_no_banco(novo_resumo: Summary, db: Session) -> Summary:
     db.refresh(novo_resumo)
     return novo_resumo
 
-def salvar_resumo_no_banco(summary_data, db: Session, nome_grupo: str, nome_audio: str, pasta: str = "D:/programação/github/EchoMeet/app/api/transcription/pasta_de_transcrições"):
-    nome_completo = f"{nome_grupo} {nome_audio}"
+def salvar_resumo_no_banco(db: Session, nome: str, user_id: int, meeting_name: str, pasta: str = "D:/programação/github/EchoMeet/app/api/transcription/pasta_de_transcrições"):
+    nome_grupo, nome_audio = nome.split(' ', 1)  # Divide o nome em grupo e áudio
+    nome_completo = concatenar_nome_arquivo(nome_grupo, nome_audio)
     caminho_arquivo = procurar_arquivo_txt(nome_completo, pasta)
 
     if "não encontrado" in caminho_arquivo:
-        return {"erro": caminho_arquivo}
-    
+        return {"erro": caminho_arquivo}  # Retorna um dicionário com o erro
+
     conteudo_txt = ler_conteudo_arquivo(caminho_arquivo)
     resumo_gerado = gerar_resumo(conteudo_txt)
     dados_dashboard = identificar_dados(conteudo_txt)
     dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)
-
     dados_dashboard_json = json.dumps(dados_dashboard_sem_duplicatas)
+
+    novo_resumo = criar_resumo_model(user_id, meeting_name, resumo_gerado, dados_dashboard_json)
     
-    novo_resumo = criar_resumo_model(summary_data, resumo_gerado, dados_dashboard_json)
-    return salvar_no_banco(novo_resumo, db)
+    # Salva o resumo no banco
+    resultado_salvamento = salvar_no_banco(novo_resumo, db)  # Função que salva no banco
+    if resultado_salvamento is None:  # Se o salvamento falhar, pode retornar um erro
+        return {"erro": "Falha ao salvar o resumo no banco."}
+    
+    return resultado_salvamento  # Retorna o objeto Summary ou uma representação do mesmo

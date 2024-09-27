@@ -88,3 +88,21 @@ def admin_user(
         )
     
     return current_user
+
+
+def get_current_user_id(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Suas credenciais não são válidas",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        payload = decode_token(token)  # Use decode_token aqui
+        user = db.query(models_user.User).filter(models_user.User.email == payload.get("sub")).first()
+        if user is None:
+            raise credentials_exception
+    except Exception:
+        raise credentials_exception
+    
+    return user.id

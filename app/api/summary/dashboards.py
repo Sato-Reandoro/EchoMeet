@@ -16,7 +16,7 @@ keywords = [
     "Reestruturação", "Recuperação de crédito", "Negociação de dívidas",
     "Negativo", "menor que zero", "abaixo de zero", "deficitário",
     "Perda líquida", "prejuízo líquido", "Passivo", "desvalorização",
-    "risco financeiro", "incerteza financeira", "Redução"
+    "risco financeiro", "incerteza financeira", "Redução", "corte"
 ]
 
 # Função para contar quantas palavras-chave estão no tipo de valor

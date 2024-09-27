@@ -1,11 +1,14 @@
 from datetime import timedelta
 from typing import List
-from fastapi import Depends, FastAPI, HTTPException, Path, Query, status
+from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, UploadFile, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api.crud import crud_user
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
 from app.api.summary.summary import salvar_resumo_no_banco
+from app.api.transcription.audio import definir_caminho_arquivo, salvar_no_diretorio, verificar_audio
+from app.api.transcription.transcription import remover_arquivo_temporario, salvar_arquivo_temporario, transcrever_audio
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models import models_user
 from app.models.summary import Summary
@@ -184,3 +187,19 @@ def delete_user(
 ):
     deleted_user = crud_user.delete_user(db, user_id)
     return deleted_user
+
+@app.post("/transcrever-audio/")
+async def transcrever_audio_endpoint(nome_grupo: str, file: UploadFile = File(...)):
+    """Endpoint para transcrever áudio enviado e retornar a transcrição."""
+    # Salvar o arquivo de áudio temporariamente
+    file_location = salvar_arquivo_temporario(file)
+
+    try:
+        # Chamar a função de transcrição
+        transcricao = transcrever_audio(file_location, nome_grupo, file.filename)
+        return JSONResponse(content={"transcricao": transcricao})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Remover o arquivo temporário
+        remover_arquivo_temporario(file_location)

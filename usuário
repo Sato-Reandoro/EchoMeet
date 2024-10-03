@@ -1,0 +1,83 @@
+import bcrypt
+import sqlite3
+
+# Conectar ao banco de dados
+def conecta_bd():
+    conn = sqlite3.connect('usuarios.db')  # Conexão com banco de dados
+    return conn
+
+
+def login(usuario, senha):
+    conn = conecta_bd()
+    cursor = conn.cursor()
+    
+    # Verificação do usuário BD 
+    cursor.execute("SELECT senha FROM usuarios WHERE usuario = ?", (usuario,))
+    resultado = cursor.fetchone()
+    
+    if resultado is None:
+        print("Usuário não encontrado!")
+        conn.close()
+        return False
+    
+    senha_armazenada = resultado[0]
+    
+
+    if bcrypt.checkpw(senha.encode('utf-8'), senha_armazenada):
+        print("Login bem-sucedido!")
+        conn.close()
+        return True
+    else:
+        print("Senha incorreta!")
+        conn.close()
+        return False
+
+# Criação de tabela de usuário no BD 
+def criar_tabela():
+    conn = conecta_bd()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT NOT NULL,
+            senha TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Adição de novo usuário
+def criar_usuario(usuario, senha):
+    senha_criptografada = bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt())  # Criptografando a senha
+    conn = conecta_bd()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO usuarios (usuario, senha) VALUES (?, ?)", (usuario, senha_criptografada))
+    conn.commit()
+    conn.close()
+    print(f"Usuário {usuario} criado com sucesso!")
+
+
+def tentativa_login():
+    tentativas = 0  
+    while tentativas < 3:
+        usuario = input("Digite o nome de usuário: ")
+        senha = input("Digite a senha: ")
+        
+       
+        if login(usuario, senha):
+            print("Acesso concedido.")
+            break
+        else:
+            tentativas += 1
+            if tentativas == 3:
+                print("Acesso negado. Você excedeu o número de tentativas.")
+            else:
+                print(f"Tentativa {tentativas} de 3. Tente novamente.")
+
+# Inicio BD
+criar_tabela()
+
+
+
+# Limite tentativa 3x
+tentativa_login()

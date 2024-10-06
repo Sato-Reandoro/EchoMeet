@@ -9,3 +9,4 @@ class Summary(Base):
     meeting_name = Column(String(255), index=True)  # Ajustar o tamanho se necessário
     summary_text = Column(Text, nullable=True)  # Permitir valores nulos
     dashboard_data = Column(Text, nullable=True)  # Permitir valores nulos
+    id_group = Column(Integer)

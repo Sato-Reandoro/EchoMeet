@@ -1,15 +1,19 @@
 from datetime import timedelta
+import json
+import os
+import subprocess
 from typing import List
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api.crud import crud_user
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
-from app.api.summary.summary import salvar_resumo_no_banco
-from app.api.transcription.transcription import remover_arquivo_temporario, salvar_arquivo_temporario, transcrever_audio
+from app.api.summary.summary import  criar_resumo_model, gerar_resumo, identificar_dados, ler_conteudo_arquivo, remover_duplicatas, salvar_no_banco, salvar_resumo_no_banco
+from app.api.transcription.transcription import TEMP_DIRECTORY, TRANSCRIPTION_DIRECTORY,  processar_audio, transcrever_audio
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models import models_user
+from app.models.summary import Summary
 from app.schemas import schemas_user
 from app.schemas.schemas_user import EmailCheck
 from fastapi import Depends, FastAPI, HTTPException
@@ -19,9 +23,28 @@ from app.api.crud.group import create_group, get_groups, delete_group, delete_em
 from app.schemas.group import GroupCreate, GroupEmailDelete, Group, GroupEmailSearch
 from app.schemas.summary import SummaryData
 from app.utils import auth
-
+from starlette.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# Middleware para permitir uploads maiores
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    # Limitar o tamanho do corpo da requisição
+    body = await request.body()
+    if len(body) > 1000000000:  # Limite de 1GB
+        return JSONResponse(status_code=400, content={"detail": "O arquivo de áudio ultrapassa o tamanho máximo permitido."})
+    response = await call_next(request)
+    return response
+
 
 def get_db():
     db = SessionLocal()
@@ -61,28 +84,6 @@ async def login_for_access_token(
     )
     
     return {"access_token": access_token, "user_type": user_type, "user_id": user_id}
-
-@app.post("/summaries/")
-async def criar_resumo(
-    summary_data: SummaryData,
-    db: Session = Depends(get_db),
-    user_id: int = Depends(auth.get_current_user_id)  # Obtém o user_id
-):
-    # Extrai os valores do nome
-    try:
-        nome_grupo, nome_audio = summary_data.nome.split(" ", 1)
-        meeting_name = nome_audio  # Define meeting_name a partir de nome_audio
-    except ValueError:
-        raise HTTPException(status_code=400, detail="O nome deve conter pelo menos um espaço.")
-
-    # Chama a função para salvar o resumo no banco
-    resultado = salvar_resumo_no_banco(db, summary_data.nome, user_id, meeting_name)
-
-    # Verifica se o resultado é um dicionário e se contém um erro
-    if isinstance(resultado, dict) and "erro" in resultado:
-        raise HTTPException(status_code=404, detail=resultado["erro"])
-
-    return {"message": "Resumo salvo com sucesso!", "summary": resultado}
 
 
 
@@ -197,18 +198,66 @@ def delete_user(
     deleted_user = crud_user.delete_user(db, user_id)
     return deleted_user
 
-@app.post("/transcrever-audio/")
-async def transcrever_audio_endpoint(nome_grupo: str = Form(...), file: UploadFile = File(...), current_user: models_user.User = Depends(auth.get_current_user)):
-    """Endpoint para transcrever áudio enviado e retornar a transcrição."""
-    # Salvar o arquivo de áudio temporariamente
-    file_location = salvar_arquivo_temporario(file)
+        
+@app.post("/transcricao-resumo/{nome_grupo}")
+async def transcricao_resumo(
+    nome_grupo: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    user_id: int = Depends(auth.get_current_user_id)
+):
+    # Chama a função processar_audio para transcrever o áudio
+    resultado_transcricao = await processar_audio(request, nome_grupo, db, user_id)
 
+    # Verifica se a transcrição foi bem-sucedida
+    transcricao_file_path = resultado_transcricao.get("transcription")
+    meeting_name = resultado_transcricao.get("meeting_name", "")
+
+    if not transcricao_file_path:
+        raise HTTPException(status_code=404, detail="Transcrição falhou.")
+
+    # Lê o conteúdo do arquivo de transcrição
+    conteudo_transcricao = ler_conteudo_arquivo(transcricao_file_path)
+    if "Arquivo não encontrado" in conteudo_transcricao:
+        raise HTTPException(status_code=404, detail=conteudo_transcricao)
+
+    # Gera o resumo a partir da transcrição
+    resumo_gerado = await gerar_resumo(conteudo_transcricao)
+
+    # Identifica dados relevantes no texto da transcrição para o dashboard
+    dados_dashboard = identificar_dados(conteudo_transcricao)
+    dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)
+    dados_dashboard_json = json.dumps(dados_dashboard_sem_duplicatas)
+
+    # Salva o resumo e dados no banco de dados com o nome do áudio como meeting_name
+    novo_resumo = criar_resumo_model(user_id, meeting_name, resumo_gerado, dados_dashboard_json)
+    resultado_salvamento = salvar_no_banco(novo_resumo, db)
+
+    if not resultado_salvamento:
+        raise HTTPException(status_code=500, detail="Falha ao salvar o resumo no banco.")
+
+    # Remove o arquivo de transcrição após o processamento
     try:
-        # Chamar a função de transcrição
-        transcricao = transcrever_audio(file_location, nome_grupo, file.filename)
-        return JSONResponse(content={"transcricao": transcricao})
+        os.remove(transcricao_file_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Remover o arquivo temporário
-        remover_arquivo_temporario(file_location)
+        raise HTTPException(status_code=500, detail=f"Erro ao remover o arquivo de transcrição: {str(e)}")
+
+    return {
+        "transcription": transcricao_file_path,
+        "summary": resumo_gerado,
+        "dashboard_data": dados_dashboard_json
+    }
+    
+@app.get("/resumo/{summary_id}")
+async def obter_resumo(summary_id: int, db: Session = Depends(get_db), user_id: int = Depends(auth.get_current_user_id)):
+    # Busca o resumo específico no banco de dados pelo ID
+    resumo = db.query(Summary).filter(Summary.summary_id == summary_id, Summary.user_id == user_id).first()
+
+    if not resumo:
+        raise HTTPException(status_code=404, detail="Resumo não encontrado.")
+
+    # Retorna o meeting_name e o summary_text
+    return {
+        "meeting_name": resumo.meeting_name,
+        "summary_text": resumo.summary_text
+    }

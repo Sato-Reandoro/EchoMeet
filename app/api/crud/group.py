@@ -1,79 +1,89 @@
-# api/crud/group.py
+# crud/crud_user.py
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from app.models.group import Group, GroupEmail
-from app.schemas.group import GroupCreate
+from app.models import models_user
+from app.models import models_group
+from app.models.models_group import Group, GroupEmail
+from app.models.models_user import User
+from app.schemas.schemas_group import GroupCreate
 
-# função que cria grupo e os emails devem ser listados
+def email_exists(db: Session, email: str) -> bool:
+    return db.query(User).filter(User.email == email).first() is not None
+
+def get_group_by_id(db: Session, group_id: int):
+    return db.query(models_group.Group).filter(models_group.Group.id == group_id).first()
+
 def create_group(db: Session, group: GroupCreate):
+    # Verificar se o nome do grupo já existe
+    existing_group = db.query(Group).filter(Group.name == group.name).first()
+    if existing_group:
+        raise HTTPException(status_code=400, detail="O nome do grupo já está em uso.")
+    
+    # Verificar se ao menos um dos emails existe no sistema de usuários
+    valid_emails = []
+    for email in group.emails:
+        user = db.query(User).filter(User.email == email.email).first()
+        if user:
+            valid_emails.append(email)
+    
+    if not valid_emails:
+        raise HTTPException(status_code=400, detail="Nenhum dos e-mails fornecidos é válido.")
+    
+    # Criar o grupo
     db_group = Group(name=group.name)
     db.add(db_group)
     db.commit()
     db.refresh(db_group)
-    
-    for email in group.emails:
-        # Verifica se o email ja foi cadastrado no grupo e retorna o emaail
-        existing_email = db.query(GroupEmail).filter(GroupEmail.email == email.email, GroupEmail.group_id == db_group.id).first()
-        if existing_email:
-            raise HTTPException(status_code=400, detail=f"O e-mail {email.email} já está registrado no grupo.")
+
+    # Adicionar apenas os emails válidos ao grupo
+    for email in valid_emails:
         db_group_email = GroupEmail(email=email.email, group_id=db_group.id)
         db.add(db_group_email)
-    
+
     db.commit()
     return db_group
 
 
-def get_groups(db: Session):
+def get_all_groups(db: Session):
     return db.query(Group).all()
 
-
-def get_group_by_id(db: Session, group_id: int):
-    return db.query(Group).filter(Group.id == group_id).first()
-
-# função que deleta um grupo
-def delete_group(db: Session, group_id: int):
-    group = db.query(Group).filter(Group.id == group_id).first()
-    db.delete(group)
-    db.commit()
-
-# função que deleta um email expecifico de um grupo
-def delete_email_from_group(db: Session, group_id: int, email: str):
-    group_email = db.query(GroupEmail).filter(GroupEmail.group_id == group_id, GroupEmail.email == email).first()
-    
-    if not group_email:
-        raise HTTPException(status_code=404, detail="E-mail não encontrado no grupo.")
-    
-    db.delete(group_email)
-    db.commit()
-    return {"msg": "E-mail removido do grupo com sucesso."}
-
-# função que puxa emails de um grupo
-def get_emails_by_group(db: Session, group_id: int):
-    group = db.query(Group).filter_by(id=group_id).first()
-    if not group:
-        raise HTTPException(status_code=404, detail="Grupo não encontrado")
-    emails = [email.email for email in group.emails]
-    
-    return {"group_id": group_id, "emails": emails}
-
-# função que puxa um grupo pelo nome
 def get_group_by_name(db: Session, group_name: str):
     group = db.query(Group).filter(Group.name == group_name).first()
     if not group:
         raise HTTPException(status_code=404, detail="Grupo não encontrado")
     return group
 
+def get_user_groups_by_email(db: Session, email: str):
+    return db.query(models_group.Group).join(models_group.GroupEmail).filter(models_group.GroupEmail.email == email).all()
 
-# função que encontra email especifico cadastrado em um grupo  
-def find_email_in_group(db: Session, group_id: int, email: str):
-    # Verificar se o grupo existe
-    group = db.query(Group).filter(Group.id == group_id).first()
-    if not group:
-        raise HTTPException(status_code=404, detail="Grupo não encontrado")
+# Função para listar os grupos do usuário autenticado
+def get_groups_by_user_id(db: Session, user_id: int):
+    # Pegar o email do usuário pelo ID
+    user = db.query(models_user.User).filter(models_user.User.id == user_id).first()
 
-    # Procurar o email no grupo
-    group_email = db.query(GroupEmail).filter(GroupEmail.group_id == group_id, GroupEmail.email == email).first()
-    if not group_email:
-        raise HTTPException(status_code=404, detail="E-mail não cadastrado no sistema")
-    
-    return {"group_id": group_id, "email": group_email.email, "message": "E-mail encontrado no grupo"}
+    if user is None:
+        return []
+
+    # Buscar todos os grupos relacionados ao email do usuário
+    return get_user_groups_by_email(db, user.email)
+
+# Função para atualizar o nome do grupo
+def update_group_name(db: Session, group_id: int, new_name: str):
+    group = db.query(models_group.Group).filter(models_group.Group.id == group_id).first()
+    if group:
+        group.name = new_name
+        db.commit()
+        db.refresh(group)
+
+def add_email_to_group(db: Session, group_id: int, email: str):
+    group_email = models_group.GroupEmail(email=email, group_id=group_id)
+    db.add(group_email)
+    db.commit()
+
+def remove_email_from_group(db: Session, group_id: int, email: str):
+    group_email = db.query(models_group.GroupEmail).filter(models_group.GroupEmail.group_id == group_id, models_group.GroupEmail.email == email).first()
+    if group_email:
+        db.delete(group_email)
+        db.commit()
+
+

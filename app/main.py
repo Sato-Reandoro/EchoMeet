@@ -14,13 +14,15 @@ from app.api.transcription.transcription import TEMP_DIRECTORY, TRANSCRIPTION_DI
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models import models_user
 from app.models.summary import Summary
+from app.models import models_group
+from app.models.models_group import GroupEmail
 from app.schemas import schemas_user
 from app.schemas.schemas_user import EmailCheck
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from app.database.connection import SessionLocal, init_db
-from app.api.crud.group import create_group, get_groups, delete_group, delete_email_from_group, get_emails_by_group, get_group_by_name, find_email_in_group
-from app.schemas.group import GroupCreate, GroupEmailDelete, Group, GroupEmailSearch
+from app.api.crud.group import create_group, get_all_groups, get_group_by_id, get_group_by_name, get_groups_by_user_id, update_group_name
+from app.schemas.schemas_group import EmailCreate, EmailResponse, GroupCreate, GroupEmailDelete, Group, GroupEmailSearch, GroupUpdate
 from app.schemas.summary import SummaryData
 from app.utils import auth
 from starlette.middleware.cors import CORSMiddleware
@@ -113,51 +115,100 @@ def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Quer
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# rota verificar se o email consta no sistema
-@app.post("/check-email/")
-def check_email(email_data: EmailCheck, db: Session = Depends(get_db)):
-    email = email_data.email
-    user = crud_user.get_user_by_email(db, email)
-    if not user:
-        raise HTTPException(status_code=404, detail="E-mail não encontrado")
-    return {"message": "E-mail válido e existente no sistema."}
-
-# Rota para procurar um email específico dentro de um grupo via corpo da requisição
-@app.post("/groups/search-email/")
-def find_email_in_group_api(email_search: GroupEmailSearch, db: Session = Depends(get_db)):
-    return find_email_in_group(db, email_search.group_id, email_search.email)
-
-
-#Rota lista de emails de um grupo
-@app.get("/groups/{group_id}/emails", response_model=dict)
-def get_group_emails(group_id: int, db: Session = Depends(get_db)):
-    return get_emails_by_group(db, group_id)
-
-#Rota que remove email de um grupo
-@app.delete("/groups/delete-email/")
-def remove_email_from_group(data: GroupEmailDelete, db: Session = Depends(get_db)):
-    return delete_email_from_group(db=db, group_id=data.group_id, email=data.email)
-
-#Rota de criação de grupo
-@app.post("/groups_create/")
+@app.post("/groups/", response_model=Group)
 def create_new_group(group: GroupCreate, db: Session = Depends(get_db)):
     return create_group(db=db, group=group)
 
-# Rota para obter um grupo pelo nome
-@app.get("/groups/name/{group_name}", response_model=Group)
+@app.get("/groups/", response_model=List[Group])
+def read_groups(db: Session = Depends(get_db)):
+    return get_all_groups(db=db)
+
+@app.get("/groups/{group_name}", response_model=Group)
 def read_group_by_name(group_name: str, db: Session = Depends(get_db)):
     return get_group_by_name(db=db, group_name=group_name)
 
-#Rota para obter todos os grupos
-@app.get("/groups/", response_model=List[Group])
-def read_groups(db: Session = Depends(get_db)):
-    return get_groups(db)
+@app.get("/grupos/user", response_model=List[Group])
+def get_user_groups(db: Session = Depends(get_db), user_id: int = Depends(auth.get_current_user_id)):
+    groups = get_groups_by_user_id(db, user_id)
 
-#Rota para deletar um grupo pelo id 
-@app.delete("/groups/{group_id}")
-def delete_existing_group(group_id: int, db: Session = Depends(get_db)):
-    delete_group(db=db, group_id=group_id)
-    return {"msg": "Grupo Deletado!"}
+    if not groups:
+        raise HTTPException(status_code=404, detail="Nenhum grupo encontrado para o usuário")
+
+    return groups
+
+@app.get("/grupos/{group_id}/emails", response_model=List[EmailResponse])
+async def get_emails_by_group(group_id: int, db: Session = Depends(get_db)):
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado")
+
+    emails = db.query(GroupEmail).filter(GroupEmail.group_id == group_id).all()
+    return emails
+
+
+@app.put("/grupos-update-name/{group_id}")
+async def update_group_name_endpoint(group_id: int, group_update: GroupUpdate, db: Session = Depends(get_db)):
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado")
+
+    # Verifica se o novo nome já está em uso
+    existing_group = db.query(models_group.Group).filter(models_group.Group.name == group_update.name).first()
+    if existing_group and existing_group.id != group_id:  # Certifique-se de que não é o mesmo grupo
+        raise HTTPException(status_code=400, detail="O nome do grupo já está em uso")
+
+    # Atualiza o nome do grupo
+    update_group_name(db, group_id, group_update.name)
+    return {"detail": "Nome do grupo atualizado com sucesso"}
+
+@app.post("/grupos/{group_id}/emails")
+async def add_email_to_group(group_id: int, email: EmailCreate, db: Session = Depends(get_db)):
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado")
+
+    # Verifica se o email já existe no sistema
+    existing_user = db.query(models_user.User).filter(models_user.User.email == email.email).first()
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="Email não cadastrado no sistema")
+
+    # Verifica se o email já existe no grupo
+    existing_email = db.query(GroupEmail).filter(GroupEmail.email == email.email, GroupEmail.group_id == group_id).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email já existe no grupo")
+
+    new_email = GroupEmail(email=email.email, group_id=group_id)
+    db.add(new_email)
+    db.commit()
+    return {"detail": "Email adicionado ao grupo com sucesso"}
+
+@app.delete("/grupos/{group_id}/emails/{email_id}")
+async def remove_email_from_group(group_id: int, email_id: int, db: Session = Depends(get_db)):
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado")
+
+    email_to_remove = db.query(GroupEmail).filter(GroupEmail.id == email_id, GroupEmail.group_id == group_id).first()
+    if not email_to_remove:
+        raise HTTPException(status_code=404, detail="Email não encontrado no grupo")
+
+    db.delete(email_to_remove)
+    db.commit()
+    return {"detail": "Email removido do grupo com sucesso"}
+
+@app.delete("/grupos/{group_id}")
+async def delete_group(group_id: int, db: Session = Depends(get_db)):
+    # Verifica se o grupo existe
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado")
+    
+    # Deleta o grupo do banco de dados
+    db.delete(group)
+    db.commit()
+    
+    return {"detail": "Grupo deletado com sucesso"}
+
 
 
 # Rota para listar todos os usuários

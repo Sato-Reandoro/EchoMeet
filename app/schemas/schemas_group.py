@@ -8,6 +8,9 @@ class GroupEmailBase(BaseModel):
 class GroupEmailCreate(GroupEmailBase):
     pass
 
+class GroupUpdate(BaseModel):
+    name: str
+
 class GroupBase(BaseModel):
     name: str
 
@@ -27,4 +30,10 @@ class GroupEmailDelete(BaseModel):
 
 class GroupEmailSearch(BaseModel):
     group_id: int
+    email: str
+    
+class EmailCreate(BaseModel):
+    email: str
+    
+class EmailResponse(BaseModel):
     email: str

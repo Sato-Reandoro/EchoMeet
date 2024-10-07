@@ -24,6 +24,6 @@ def get_db():
 
 def init_db():
     import app.models.summary
-    import app.models.group
+    import app.models.models_group
     import app.models.models_user
     Base.metadata.create_all(bind=engine)  # Cria todas as tabelas no banco de dados

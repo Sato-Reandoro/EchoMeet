@@ -3,7 +3,7 @@ import json
 import re
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from app.models.summary import Summary
+from app.models.models_summary import Summary
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage
 from app.schemas.summary import SummaryData

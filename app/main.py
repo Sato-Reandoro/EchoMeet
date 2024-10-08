@@ -13,7 +13,7 @@ from app.api.summary.summary import  criar_resumo_model, gerar_resumo, identific
 from app.api.transcription.transcription import TEMP_DIRECTORY, TRANSCRIPTION_DIRECTORY,  processar_audio, transcrever_audio
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models import models_user
-from app.models.summary import Summary
+from app.models.models_summary import Summary
 from app.models import models_group
 from app.models.models_group import GroupEmail
 from app.schemas import schemas_user
@@ -21,7 +21,7 @@ from app.schemas.schemas_user import EmailCheck
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from app.database.connection import SessionLocal, init_db
-from app.api.crud.group import create_group, get_all_groups, get_group_by_id, get_group_by_name, get_groups_by_user_id, update_group_name
+from app.api.crud.group import create_group, get_all_groups, get_group_by_id, get_group_by_name, get_group_id, get_groups_by_user_id, id_name, update_group_name
 from app.schemas.schemas_group import EmailCreate, EmailResponse, GroupCreate, GroupEmailDelete, Group, GroupEmailSearch, GroupUpdate
 from app.schemas.summary import SummaryData
 from app.utils import auth
@@ -116,15 +116,15 @@ def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Quer
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/groups/", response_model=Group)
-def create_new_group(group: GroupCreate, db: Session = Depends(get_db)):
+def create_new_group(group: GroupCreate, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     return create_group(db=db, group=group)
 
 @app.get("/groups/", response_model=List[Group])
-def read_groups(db: Session = Depends(get_db)):
+def read_groups(db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     return get_all_groups(db=db)
 
 @app.get("/groups/{group_name}", response_model=Group)
-def read_group_by_name(group_name: str, db: Session = Depends(get_db)):
+def read_group_by_name(group_name: str, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     return get_group_by_name(db=db, group_name=group_name)
 
 @app.get("/grupos/user", response_model=List[Group])
@@ -137,7 +137,7 @@ def get_user_groups(db: Session = Depends(get_db), user_id: int = Depends(auth.g
     return groups
 
 @app.get("/grupos/{group_id}/emails", response_model=List[EmailResponse])
-async def get_emails_by_group(group_id: int, db: Session = Depends(get_db)):
+async def get_emails_by_group(group_id: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     group = get_group_by_id(db, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Grupo não encontrado")
@@ -162,7 +162,7 @@ async def update_group_name_endpoint(group_id: int, group_update: GroupUpdate, d
     return {"detail": "Nome do grupo atualizado com sucesso"}
 
 @app.post("/grupos/{group_id}/emails")
-async def add_email_to_group(group_id: int, email: EmailCreate, db: Session = Depends(get_db)):
+async def add_email_to_group(group_id: int, email: EmailCreate, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     group = get_group_by_id(db, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Grupo não encontrado")
@@ -183,7 +183,7 @@ async def add_email_to_group(group_id: int, email: EmailCreate, db: Session = De
     return {"detail": "Email adicionado ao grupo com sucesso"}
 
 @app.delete("/grupos/{group_id}/emails/{email_id}")
-async def remove_email_from_group(group_id: int, email_id: int, db: Session = Depends(get_db)):
+async def remove_email_from_group(group_id: int, email_id: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     group = get_group_by_id(db, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="Grupo não encontrado")
@@ -197,7 +197,7 @@ async def remove_email_from_group(group_id: int, email_id: int, db: Session = De
     return {"detail": "Email removido do grupo com sucesso"}
 
 @app.delete("/grupos/{group_id}")
-async def delete_group(group_id: int, db: Session = Depends(get_db)):
+async def delete_group(group_id: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     # Verifica se o grupo existe
     group = get_group_by_id(db, group_id)
     if not group:
@@ -257,12 +257,19 @@ async def transcricao_resumo(
     db: Session = Depends(get_db),
     user_id: int = Depends(auth.get_current_user_id)
 ):
+    # Busca o ID do grupo com base no nome
+    id_grupo = id_name(nome_grupo, db)  # Chamada síncrona
+
+    # Verifica se o grupo existe
+    if id_grupo is None:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado.")
+
     # Chama a função processar_audio para transcrever o áudio
-    resultado_transcricao = await processar_audio(request, nome_grupo, db, user_id)
+    resultado_transcricao = await processar_audio(request, nome_grupo, db, user_id)  # Verifique se é assíncrona
 
     # Verifica se a transcrição foi bem-sucedida
     transcricao_file_path = resultado_transcricao.get("transcription")
-    meeting_name = resultado_transcricao.get("meeting_name", "")
+    meeting_name = f"{nome_grupo}_{resultado_transcricao.get('meeting_name', '')}"
 
     if not transcricao_file_path:
         raise HTTPException(status_code=404, detail="Transcrição falhou.")
@@ -273,17 +280,24 @@ async def transcricao_resumo(
         raise HTTPException(status_code=404, detail=conteudo_transcricao)
 
     # Gera o resumo a partir da transcrição
-    resumo_gerado = await gerar_resumo(conteudo_transcricao)
+    resumo_gerado = await gerar_resumo(conteudo_transcricao)  # Verifique se é assíncrona
 
     # Identifica dados relevantes no texto da transcrição para o dashboard
-    dados_dashboard = identificar_dados(conteudo_transcricao)
-    dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)
+    dados_dashboard = identificar_dados(conteudo_transcricao)  # Verifique se é assíncrona
+    dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)  # Verifique se é assíncrona
     dados_dashboard_json = json.dumps(dados_dashboard_sem_duplicatas)
 
-    # Salva o resumo e dados no banco de dados com o nome do áudio como meeting_name
-    novo_resumo = criar_resumo_model(user_id, meeting_name, resumo_gerado, dados_dashboard_json)
-    resultado_salvamento = salvar_no_banco(novo_resumo, db)
-
+    # Salva o resumo e dados no banco de dados
+    novo_resumo = Summary(
+        user_id=user_id,
+        meeting_name=meeting_name,  # Campo atualizado para incluir o nome do grupo
+        summary_text=resumo_gerado,
+        dashboard_data=dados_dashboard_json,
+        id_group=id_grupo  # Passa o id_grupo aqui
+    )
+    
+    # Salva o resumo no banco e verifica o resultado
+    resultado_salvamento = salvar_no_banco(novo_resumo, db)  # Certifique-se que esta função salve corretamente
     if not resultado_salvamento:
         raise HTTPException(status_code=500, detail="Falha ao salvar o resumo no banco.")
 
@@ -294,10 +308,13 @@ async def transcricao_resumo(
         raise HTTPException(status_code=500, detail=f"Erro ao remover o arquivo de transcrição: {str(e)}")
 
     return {
+        "group_id": id_grupo,  # Inclui o ID do grupo na resposta
         "transcription": transcricao_file_path,
         "summary": resumo_gerado,
         "dashboard_data": dados_dashboard_json
     }
+
+
     
 @app.get("/resumo/{summary_id}")
 async def obter_resumo(summary_id: int, db: Session = Depends(get_db), user_id: int = Depends(auth.get_current_user_id)):
@@ -312,3 +329,21 @@ async def obter_resumo(summary_id: int, db: Session = Depends(get_db), user_id: 
         "meeting_name": resumo.meeting_name,
         "summary_text": resumo.summary_text
     }
+
+@app.get("/grupos/{group_id}/reunioes")
+async def listar_reunioes_por_grupo(group_id: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.get_current_user)):
+    # Verifica se o grupo existe
+    grupo = get_group_by_id(db, group_id)
+    if not grupo:
+        raise HTTPException(status_code=404, detail="Grupo não encontrado")
+
+    # Busca todas as reuniões associadas a este grupo
+    reunioes = db.query(Summary).filter(Summary.id_group == group_id).all()
+
+    if not reunioes:
+        print(f"Debug: Nenhuma reunião encontrada para o group_id {group_id}.")
+        return {"detail": "Nenhuma reunião encontrada para este grupo."}
+
+    return reunioes
+
+

@@ -1,5 +1,7 @@
 # crud/crud_user.py
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from app.models import models_user
 from app.models import models_group
@@ -87,3 +89,10 @@ def remove_email_from_group(db: Session, group_id: int, email: str):
         db.commit()
 
 
+def get_group_id(db: Session, nome_grupo: str):
+    return db.query(Group).filter(Group.name == nome_grupo).first()
+
+
+def id_name(nome_grupo: str, db: Session):
+    grupo = db.query(Group).filter(Group.name == nome_grupo).first()
+    return grupo.id if grupo else None

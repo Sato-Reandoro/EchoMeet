@@ -3,7 +3,7 @@ import plotly.express as px
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 import json
-from app.models.summary import Summary
+from app.models.models_summary import Summary
 
 # Lista de palavras-chave relacionadas a problemas financeiros
 keywords = [

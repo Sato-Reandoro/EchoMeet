@@ -9,7 +9,7 @@ class Group(Base):
     id = Column(Integer, primary_key=True, index=True)  # ID automático
     name = Column(String, nullable=False, unique=True)
     emails = relationship("GroupEmail", back_populates="group")
-
+    summaries = relationship("Summary", back_populates="group")
 class GroupEmail(Base):
     __tablename__ = 'group_emails'
     

@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import UploadFile, HTTPException
 
 # Diretório onde os arquivos de áudio serão salvos
-UPLOAD_DIRECTORY = "D:/programação/github/EchoMeet/app/api/transcription/audios"
+UPLOAD_DIRECTORY = "audios"
 
 # Criar o diretório caso ele não exista
 Path(UPLOAD_DIRECTORY).mkdir(parents=True, exist_ok=True)

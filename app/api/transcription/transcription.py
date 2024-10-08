@@ -22,11 +22,11 @@ TRANSCRIPTION_API = os.getenv("TRANSCRIPTION_API")
 app = FastAPI()
 
 # Diretório onde as transcrições serão salvas
-TRANSCRIPTION_DIRECTORY = "D:/programação/github/EchoMeet/app/api/transcription/pasta_de_transcrições"
+TRANSCRIPTION_DIRECTORY = "pasta_de_transcrições"
 Path(TRANSCRIPTION_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 # Diretório temporário para salvar arquivos de áudio
-TEMP_DIRECTORY = "D:/programação/github/EchoMeet/app/api/transcription/audios/temp"
+TEMP_DIRECTORY = "audios/temp"
 Path(TEMP_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 def verificar_duracao_audio(arquivo_audio: str) -> float:

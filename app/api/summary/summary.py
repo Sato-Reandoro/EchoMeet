@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.models.models_summary import Summary
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage
-from app.schemas.summary import SummaryData
 
 load_dotenv()
 chave_openai = os.getenv("OPENAI_API_KEY")

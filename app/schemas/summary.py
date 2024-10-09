@@ -1,5 +1,5 @@
 from fastapi import UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class SummaryData(BaseModel):

@@ -1,29 +1,26 @@
 from datetime import timedelta
 import json
 import os
-import subprocess
 from typing import List
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Path, Query, Request, UploadFile, status
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api.crud import crud_user
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
-from app.api.summary.summary import  criar_resumo_model, gerar_resumo, identificar_dados, ler_conteudo_arquivo, remover_duplicatas, salvar_no_banco, salvar_resumo_no_banco
-from app.api.transcription.transcription import TEMP_DIRECTORY, TRANSCRIPTION_DIRECTORY,  processar_audio, transcrever_audio
+from app.api.summary.summary import gerar_resumo, identificar_dados, ler_conteudo_arquivo, remover_duplicatas, salvar_no_banco
+from app.api.transcription.transcription import TEMP_DIRECTORY, TRANSCRIPTION_DIRECTORY,  processar_audio
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models import models_user
 from app.models.models_summary import Summary
 from app.models import models_group
 from app.models.models_group import GroupEmail
 from app.schemas import schemas_user
-from app.schemas.schemas_user import EmailCheck
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 from app.database.connection import SessionLocal, init_db
-from app.api.crud.group import create_group, get_all_groups, get_group_by_id, get_group_by_name, get_group_id, get_groups_by_user_id, id_name, update_group_name
-from app.schemas.schemas_group import EmailCreate, EmailResponse, GroupCreate, GroupEmailDelete, Group, GroupEmailSearch, GroupUpdate
-from app.schemas.summary import SummaryData
+from app.api.crud.group import create_group, get_all_groups, get_group_by_id, get_group_by_name, get_groups_by_user_id, id_name, update_group_name
+from app.schemas.schemas_group import EmailCreate, EmailResponse, GroupCreate, Group, GroupUpdate
 from app.utils import auth
 from starlette.middleware.cors import CORSMiddleware
 

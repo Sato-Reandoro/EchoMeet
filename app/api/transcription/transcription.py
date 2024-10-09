@@ -1,14 +1,11 @@
-import asyncio
-from datetime import datetime
 import os
 import re
 import subprocess
 from pathlib import Path
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException
+from fastapi import FastAPI, Request, UploadFile, HTTPException
 from google.cloud import speech
 from pydub import AudioSegment  # Importa a biblioteca para manipular áudio
 from pydub.utils import mediainfo
-from app.api.summary.summary import concatenar_nome_arquivo, gerar_resumo, salvar_resumo_no_banco
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from google.cloud import storage

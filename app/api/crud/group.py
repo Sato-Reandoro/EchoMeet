@@ -1,7 +1,5 @@
 # crud/crud_user.py
 from fastapi import HTTPException
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from app.models import models_user
 from app.models import models_group

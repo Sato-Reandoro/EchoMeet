@@ -19,7 +19,6 @@ def concatenar_nome_arquivo(nome_grupo: str, nome_audio: str) -> str:
 def construir_caminho_arquivo(nome_arquivo: str, pasta: str = "../transcription/pasta_de_transcrições") -> str:
     return os.path.join(pasta, nome_arquivo)
 
-
 def verificar_existencia_arquivo(caminho_arquivo: str) -> bool:
     return os.path.exists(caminho_arquivo)
 
@@ -44,7 +43,7 @@ def ler_conteudo_arquivo(caminho_arquivo: str) -> str:
 llm = ChatOpenAI(openai_api_key=chave_openai, temperature=0.9, model_name="gpt-3.5-turbo")
 
 async def gerar_resumo(texto: str) -> str:
-    mensagem = HumanMessage(content=f"Você é um assistente de IA projetado para analisar e resumir discussões de reuniões. Sua tarefa é revisar o texto abaixo e criar um resumo que capture os principais pontos discutidos, incluindo qualquer decisão e ação a ser tomada. Se não encontrar nenhum dado relevante, retorne apenas a mensagem 'Nenhum dado foi encontrado'. Crie o resumo no formato de texto em parágrafos:\n\n{texto}")
+    mensagem = HumanMessage(content=f"Você é um assistente de IA projetado para analisar e resumir discussões de reuniões. Sua tarefa é revisar o texto abaixo e criar um resumo que capture os principais pontos discutidos, incluindo qualquer decisão e ação a ser tomada. Se não encontrar nenhum dado relevante, retorne apenas a mensagem 'Nenhum dado foi encontrado'. Crie o resumo no formato de texto em parágrafos usando a formatação em markdown:\n\n{texto}")
     
     resposta = await asyncio.to_thread(llm.invoke, [mensagem])
     return resposta.content
@@ -133,7 +132,7 @@ async def salvar_resumo_no_banco(db: Session, nome: str, user_id: int, meeting_n
 
     conteudo_txt = ler_conteudo_arquivo(caminho_arquivo)
     resumo_gerado = await gerar_resumo(conteudo_txt)  # Aguarda a geração do resumo
-    dados_dashboard = identificar_dados(conteudo_txt)
+    dados_dashboard = identificar_dados(conteudo_txt)  # Alteração aqui: agora usa o texto original
     dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)
     dados_dashboard_json = json.dumps(dados_dashboard_sem_duplicatas)
 
@@ -144,4 +143,4 @@ async def salvar_resumo_no_banco(db: Session, nome: str, user_id: int, meeting_n
     if resultado_salvamento is None:  # Se o salvamento falhar, pode retornar um erro
         return {"erro": "Falha ao salvar o resumo no banco."}
     
-    return resultado_salvamento 
+    return resultado_salvamento

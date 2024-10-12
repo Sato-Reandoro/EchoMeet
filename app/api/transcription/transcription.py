@@ -23,7 +23,7 @@ TRANSCRIPTION_DIRECTORY = "pasta_de_transcrições"
 Path(TRANSCRIPTION_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 # Diretório temporário para salvar arquivos de áudio
-TEMP_DIRECTORY = "audios/temp"
+TEMP_DIRECTORY = "audios\temp"
 Path(TEMP_DIRECTORY).mkdir(parents=True, exist_ok=True)
 
 def verificar_duracao_audio(arquivo_audio: str) -> float:

@@ -16,13 +16,13 @@ def concatenar_nome_arquivo(nome_grupo: str, nome_audio: str) -> str:
     nome_audio = nome_audio.rstrip('.txt')  # Remove .txt se estiver presente
     return f"{nome_grupo}_{nome_audio}.txt" 
 
-def construir_caminho_arquivo(nome_arquivo: str, pasta: str = "../transcription/pasta_de_transcrições") -> str:
+def construir_caminho_arquivo(nome_arquivo: str, pasta: str = "..\transcription\pasta_de_transcrições") -> str:
     return os.path.join(pasta, nome_arquivo)
 
 def verificar_existencia_arquivo(caminho_arquivo: str) -> bool:
     return os.path.exists(caminho_arquivo)
 
-def procurar_arquivo_txt(nome: str, pasta: str = "../transcription/pasta_de_transcrições") -> str:
+def procurar_arquivo_txt(nome: str, pasta: str = "..\transcription\pasta_de_transcrições") -> str:
     nome_arquivo = concatenar_nome_arquivo(*nome.split(' ', 1))
     caminho_completo = construir_caminho_arquivo(nome_arquivo, pasta)
     

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.models_summary import Summary
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage
+import asyncio
 
 load_dotenv()
 chave_openai = os.getenv("OPENAI_API_KEY")
@@ -116,7 +117,7 @@ def salvar_no_banco(novo_resumo: Summary, db: Session) -> Summary:
     db.refresh(novo_resumo)
     return novo_resumo
 
-import asyncio
+
 
 async def salvar_resumo_no_banco(db: Session, nome: str, user_id: int, meeting_name: str, pasta: str = "D:/programação/github/EchoMeet/app/api/transcription/pasta_de_transcrições"):
     nome_grupo, nome_audio = nome.split(' ', 1)  # Divide o nome em grupo e áudio

@@ -91,7 +91,7 @@ async def transcrever_audio(arquivo_audio: str, nome_grupo: str, meeting_name: s
             language_code="pt-BR",
             encoding=encoding,
             sample_rate_hertz=taxa_amostragem,
-        )
+           )
 
         audio = speech.RecognitionAudio(uri=gcs_uri)
 
@@ -99,7 +99,7 @@ async def transcrever_audio(arquivo_audio: str, nome_grupo: str, meeting_name: s
         operation = client.long_running_recognize(config=config, audio=audio)
 
         # Aguarda a conclusão da operação
-        response = operation.result(timeout=90)  # Espera pela conclusão da operação
+        response = operation.result(timeout=3600)  # Espera pela conclusão da operação
 
         # Extrai a transcrição da resposta
         transcricoes = []

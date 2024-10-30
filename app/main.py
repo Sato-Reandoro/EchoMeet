@@ -3,7 +3,7 @@ import json
 import os
 from typing import List
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api.crud import crud_user
@@ -77,9 +77,10 @@ async def login_for_access_token(
     user_type = user.user_type
     user_id = user.id
     
+    # Ajustando o tempo de expiração para 8 horas
     access_token = auth.create_access_token(
         data={"sub": user.email, "user_type": user_type},
-        expires_delta=timedelta(minutes=15)
+        expires_delta=timedelta(hours=8)  # Agora será 8 horas
     )
     
     return {"access_token": access_token, "user_type": user_type, "user_id": user_id}
@@ -87,28 +88,28 @@ async def login_for_access_token(
 
 
 @app.get("/dashboard-options/{summary_id}")
-def get_dashboard_options_api(summary_id: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.get_current_user)):
+def get_dashboard_options_api(summary_id: int, db: Session = Depends(get_db)):
     try:
         options = get_dashboard_options(db, summary_id)
         return options
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# Endpoint para gerar um gráfico com base no tipo de valor (numérico ou percentual)
+# Endpoint para gerar gráfico por tipo de valor (numérico ou percentual)
 @app.get("/generate-dashboard/{summary_id}/{value_type}")
-def generate_dashboard_api(summary_id: int, value_type: str, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.get_current_user)):
+def generate_dashboard_api(summary_id: int, value_type: str, db: Session = Depends(get_db)):
     try:
-        generate_dashboard_by_type(db, summary_id, value_type)
-        return {"message": f"Gráfico de tipo '{value_type}' gerado com sucesso."}
+        html_content = generate_dashboard_by_type(db, summary_id, value_type)
+        return HTMLResponse(content=html_content, media_type="text/html")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# Novo endpoint para gerar gráficos a partir de várias métricas
+# Endpoint para gerar gráficos para várias métricas
 @app.get("/generate-dashboard-by-metrics/{summary_id}")
-def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Query(...), db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.get_current_user)):
+def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Query(...), db: Session = Depends(get_db)):
     try:
-        generate_dashboards_for_metrics(db, summary_id, metrics)
-        return {"message": "Gráficos gerados com sucesso para as métricas fornecidas."}
+        html_content = generate_dashboards_for_metrics(db, summary_id, metrics)
+        return HTMLResponse(content=html_content, media_type="text/html")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

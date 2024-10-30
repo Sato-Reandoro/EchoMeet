@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://postgres:MYu1190@db:5432/echomeet_db
+      GOOGLE_APPLICATION_CREDENTIALS: /documentos/json/audioechomeet-14d421656842.json
+      TRANSCRIPTION_API: /documentos/json/audioechomeet-14d421656842.json
+    volumes:
+      - /home/sato/Documents/json/audioechomeet-14d421656842.json:/documentos/json/audioechomeet-14d421656842.json
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: MYu1190
+      POSTGRES_DB: echomeet_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

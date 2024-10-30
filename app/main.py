@@ -79,7 +79,7 @@ async def login_for_access_token(
     
     access_token = auth.create_access_token(
         data={"sub": user.email, "user_type": user_type},
-        expires_delta=timedelta(minutes=15)
+        expires_delta=timedelta(hours=8)
     )
     
     return {"access_token": access_token, "user_type": user_type, "user_id": user_id}

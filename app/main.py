@@ -194,12 +194,18 @@ async def remove_email_from_group(group_id: int, email_id: int, db: Session = De
     db.commit()
     return {"detail": "Email removido do grupo com sucesso"}
 
-@app.delete("/grupos/{group_id}")
-async def delete_group(group_id: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
+@app.delete("/grupos/{id_group}")
+async def delete_group(id_group: int, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     # Verifica se o grupo existe
-    group = get_group_by_id(db, group_id)
+    group = get_group_by_id(db, id_group)
     if not group:
         raise HTTPException(status_code=404, detail="Grupo não encontrado")
+    
+    # Busca os summaries associados ao grupo, se houver
+    summaries = db.query(Summary).filter(Summary.id_group == id_group).all()
+    if summaries:
+        for summary in summaries:
+            db.delete(summary)
     
     # Deleta o grupo do banco de dados
     db.delete(group)

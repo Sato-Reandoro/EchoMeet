@@ -36,6 +36,33 @@ app.add_middleware(
 )
 
 @app.middleware("http")
+async def add_cookie_settings(request: Request, call_next):
+    response = await call_next(request)
+
+    # Configura SameSite e Secure para todos os cookies na resposta
+    response.set_cookie(
+        key="example_cookie",
+        value="cookie_value",
+        samesite="None",  # Define o SameSite como None
+        secure=True       # Define Secure como True
+    )
+    
+    return response
+
+@app.middleware("http")
+async def force_https(request: Request, call_next):
+    # Verifica se a requisição não está usando HTTPS
+    if request.url.scheme != "https":
+        # Redireciona para o mesmo URL, mas com HTTPS
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url=url)
+
+    # Continua o fluxo normal da requisição
+    response = await call_next(request)
+    return response
+
+
+@app.middleware("http")
 async def limit_upload_size(request: Request, call_next):
     # Limitar o tamanho do corpo da requisição
     body = await request.body()
@@ -51,7 +78,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
 @app.on_event("startup")
 def on_startup():
     init_db()
@@ -117,8 +143,8 @@ def generate_dashboard_by_metrics_api(summary_id: int, metrics: list[str] = Quer
 def create_new_group(group: GroupCreate, db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
     return create_group(db=db, group=group)
 
-@app.get("/groups/", response_model=List[Group])
-def read_groups(db: Session = Depends(get_db), current_user: models_user.User = Depends(auth.admin_user)):
+@app.get("/groupsonly/", response_model=List[Group])
+def read_groups(db: Session = Depends(get_db)):
     return get_all_groups(db=db)
 
 @app.get("/groups/{group_name}", response_model=Group)

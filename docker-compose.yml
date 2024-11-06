@@ -7,10 +7,10 @@ services:
       - "8001:8001"
     environment:
       DATABASE_URL: postgresql://postgres:MYu1190@db:5432/echomeet_db
-      GOOGLE_APPLICATION_CREDENTIALS: /documentos/json/audioechomeet-14d421656842.json
-      TRANSCRIPTION_API: /documentos/json/audioechomeet-14d421656842.json
+      GOOGLE_APPLICATION_CREDENTIALS: /audioechomeet-14d421656842.json
+      TRANSCRIPTION_API: /audioechomeet-14d421656842.json
     volumes:
-      - /home/sato/Documents/json/audioechomeet-14d421656842.json:/documentos/json/audioechomeet-14d421656842.json
+      - /home/leandrojunior2326/audioechomeet-14d421656842.json:/audioechomeet-14d421656842.json
     depends_on:
       - db
     networks:

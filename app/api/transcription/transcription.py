@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from fastapi import FastAPI, Request, UploadFile, HTTPException
 from google.cloud import speech
-from pydub import AudioSegment  # Importa a biblioteca para manipular áudio
+from pydub import AudioSegment  # Para manipulação de áudio
 from pydub.utils import mediainfo
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
@@ -30,6 +30,11 @@ def verificar_duracao_audio(arquivo_audio: str) -> float:
     """Verifica a duração do áudio em segundos."""    
     audio = AudioSegment.from_file(arquivo_audio)
     return len(audio) / 1000  # Retorna a duração em segundos
+
+def converter_audio(input_file, output_file):
+    """Converte o áudio para MP3."""    
+    audio = AudioSegment.from_file(input_file)
+    audio.export(output_file, format="mp3")  # Converte para MP3
 
 def salvar_arquivo_temporario(audio: UploadFile) -> str:
     """Salva o arquivo de áudio temporariamente para processamento."""    
@@ -68,6 +73,8 @@ async def transcrever_audio(arquivo_audio: str, nome_grupo: str, meeting_name: s
         blob = bucket.blob(f'audios/{os.path.basename(arquivo_audio)}')
         blob.upload_from_filename(arquivo_audio)
 
+        print(f"Arquivo {arquivo_audio} enviado para o Google Cloud Storage com sucesso.")
+        
         gcs_uri = f'gs://{BUCKET_NAME}/audios/{os.path.basename(arquivo_audio)}'
 
         # Obter o formato e a taxa de amostragem do áudio
@@ -76,8 +83,6 @@ async def transcrever_audio(arquivo_audio: str, nome_grupo: str, meeting_name: s
 
         # Configuração da transcrição
         encoding = speech.RecognitionConfig.AudioEncoding.LINEAR16  # Valor padrão
-
-        # Ajusta a codificação com base no formato do áudio
         if formato_audio == 'mp3':
             encoding = speech.RecognitionConfig.AudioEncoding.MP3
         elif formato_audio == 'wav':
@@ -91,20 +96,18 @@ async def transcrever_audio(arquivo_audio: str, nome_grupo: str, meeting_name: s
             language_code="pt-BR",
             encoding=encoding,
             sample_rate_hertz=taxa_amostragem,
-           )
+        )
 
         audio = speech.RecognitionAudio(uri=gcs_uri)
 
-        # Usando LongRunningRecognize
+        # Usando LongRunningRecognize para longas gravações
         operation = client.long_running_recognize(config=config, audio=audio)
 
-        # Aguarda a conclusão da operação
-        response = operation.result(timeout=3600)  # Espera pela conclusão da operação
+        # Espera pela conclusão da operação
+        response = operation.result(timeout=3600)
 
         # Extrai a transcrição da resposta
-        transcricoes = []
-        for result in response.results:
-            transcricoes.append(result.alternatives[0].transcript)
+        transcricoes = [result.alternatives[0].transcript for result in response.results]
 
         # Combine as transcrições em uma única string
         transcricao_final = "\n".join(transcricoes)
@@ -116,48 +119,16 @@ async def transcrever_audio(arquivo_audio: str, nome_grupo: str, meeting_name: s
         with open(transcricao_file_path, "w", encoding="utf-8") as f:
             f.write(transcricao_final)
 
-        return transcricao_file_path  # Retorna o caminho do arquivo de transcrição
+        return transcricao_file_path
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao transcrever áudio: {str(e)}")
-
-    except Exception as e:
+        print(f"Erro na transcrição: {str(e)}")  # Log detalhado de erro
         raise HTTPException(status_code=500, detail=f"Erro ao transcrever áudio: {str(e)}")
 
 def remover_arquivo_temporario(file_path: str):
     """Remove o arquivo de áudio temporário após o processamento."""    
     if os.path.exists(file_path):
         os.remove(file_path)
-
-def salvar_mono_audio_file(mono_audio_file: str, filename: str) -> str:
-    """Salva o arquivo mono_audio_file no diretório de transcrições."""    
-    file_path = os.path.join(TEMP_DIRECTORY, filename)
-    # Usamos o FFmpeg para salvar o arquivo, mas também podemos usar a biblioteca soundfile se necessário.
-    subprocess.run(['ffmpeg', '-i', mono_audio_file, file_path], check=True)
-    return file_path
-
-def converter_audio_para_mono(caminho_entrada: str, caminho_saida: str):
-    """Converte um arquivo de áudio para mono usando FFmpeg."""    
-    comando = [
-        'ffmpeg',
-        '-i', caminho_entrada,
-        '-ac', '1',  # Define 1 canal (mono)
-        caminho_saida,
-        '-y'  # Sobrescreve o arquivo de saída se já existir
-    ]
-    subprocess.run(comando, check=True)
-
-async def salvar_transcricao_em_txt(nome_grupo: str, meeting_name: str, transcricoes: list):
-    """Salva a transcrição em um arquivo .txt."""    
-    transcricao_final = "\n".join(transcricoes)
-    transcricao_file_name = f"{nome_grupo} {meeting_name}.txt"
-    transcricao_file_path = os.path.join(TEMP_DIRECTORY, transcricao_file_name)
-
-    # Salva a transcrição em um arquivo .txt
-    with open(transcricao_file_path, "w", encoding="utf-8") as f:
-        f.write(transcricao_final)
-
-    return transcricao_file_path
 
 async def processar_audio(request: Request, nome_grupo: str, db: Session, user_id: int):
     """Processa o áudio e transcreve."""
@@ -183,12 +154,16 @@ async def processar_audio(request: Request, nome_grupo: str, db: Session, user_i
             os.remove(audio_path)
             raise HTTPException(status_code=400, detail="Arquivo de áudio muito grande.")
 
-        # Converte o áudio para mono
-        audio_mono_path = os.path.join(TEMP_DIRECTORY, f"mono_{audio_filename}")
-        converter_audio_para_mono(audio_path, audio_mono_path)
+        # Converte o áudio para .wav
+        audio_convertido_path = os.path.join(TEMP_DIRECTORY, f"convertido_{audio_filename.rsplit('.', 1)[0]}.wav")
+        converter_audio(audio_path, audio_convertido_path)
 
-        # Transcreve o áudio e retorna o nome do áudio no resultado
-        transcricao_file_path = await transcrever_audio(audio_mono_path, nome_grupo, audio_filename.rsplit('.', 1)[0])
+        # Converte o arquivo de áudio para MP3
+        audio_mp3_path = os.path.join(TEMP_DIRECTORY, f"convertido_{audio_filename.rsplit('.', 1)[0]}.mp3")
+        converter_audio(audio_convertido_path, audio_mp3_path)
+
+        # Transcreve o áudio
+        transcricao_file_path = await transcrever_audio(audio_mp3_path, nome_grupo, audio_filename.rsplit('.', 1)[0])
 
         # Verifica se o arquivo de transcrição foi gerado corretamente
         if not os.path.exists(transcricao_file_path):
@@ -201,4 +176,5 @@ async def processar_audio(request: Request, nome_grupo: str, db: Session, user_i
     finally:
         # Remove os arquivos temporários
         remover_arquivo_temporario(audio_path)
-        remover_arquivo_temporario(audio_mono_path)
+        remover_arquivo_temporario(audio_convertido_path)
+        remover_arquivo_temporario(audio_mp3_path)

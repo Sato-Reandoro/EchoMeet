@@ -288,14 +288,14 @@ async def transcricao_resumo(
     user_id: int = Depends(auth.get_current_user_id)
 ):
     # Busca o ID do grupo com base no nome
-    id_grupo = id_name(nome_grupo, db)  # Chamada síncrona
+    id_grupo = id_name(nome_grupo, db)
 
     # Verifica se o grupo existe
     if id_grupo is None:
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
 
     # Chama a função processar_audio para transcrever o áudio
-    resultado_transcricao = await processar_audio(request, nome_grupo, db, user_id)  # Verifique se é assíncrona
+    resultado_transcricao = await processar_audio(request, nome_grupo, db, user_id)
 
     # Verifica se a transcrição foi bem-sucedida
     transcricao_file_path = resultado_transcricao.get("transcription")
@@ -310,24 +310,24 @@ async def transcricao_resumo(
         raise HTTPException(status_code=404, detail=conteudo_transcricao)
 
     # Gera o resumo a partir da transcrição
-    resumo_gerado = await gerar_resumo(conteudo_transcricao)  # Verifique se é assíncrona
+    resumo_gerado = await gerar_resumo(conteudo_transcricao)
 
     # Identifica dados relevantes no texto da transcrição para o dashboard
-    dados_dashboard = identificar_dados(conteudo_transcricao)  # Verifique se é assíncrona
-    dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)  # Verifique se é assíncrona
+    dados_dashboard = identificar_dados(conteudo_transcricao)
+    dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)
     dados_dashboard_json = json.dumps(dados_dashboard_sem_duplicatas)
 
     # Salva o resumo e dados no banco de dados
     novo_resumo = Summary(
         user_id=user_id,
-        meeting_name=meeting_name,  # Campo atualizado para incluir o nome do grupo
+        meeting_name=meeting_name,
         summary_text=resumo_gerado,
         dashboard_data=dados_dashboard_json,
-        id_group=id_grupo  # Passa o id_grupo aqui
+        id_group=id_grupo
     )
-    
+
     # Salva o resumo no banco e verifica o resultado
-    resultado_salvamento = salvar_no_banco(novo_resumo, db)  # Certifique-se que esta função salve corretamente
+    resultado_salvamento = salvar_no_banco(novo_resumo, db)
     if not resultado_salvamento:
         raise HTTPException(status_code=500, detail="Falha ao salvar o resumo no banco.")
 
@@ -338,7 +338,7 @@ async def transcricao_resumo(
         raise HTTPException(status_code=500, detail=f"Erro ao remover o arquivo de transcrição: {str(e)}")
 
     return {
-        "group_id": id_grupo,  # Inclui o ID do grupo na resposta
+        "group_id": id_grupo,
         "transcription": transcricao_file_path,
         "summary": resumo_gerado,
         "dashboard_data": dados_dashboard_json

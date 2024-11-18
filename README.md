@@ -108,7 +108,7 @@ Um agradecimento especial a:
 - <a href="https://github.com/moises-menezesdev">
     <img src="https://github.com/moises-menezesdev.png" width="50" height="50" alt="moises-menezesdev" style="vertical-align: middle; margin-right: 10px;">
   </a>  
-**[moises-menezesdev](https://github.com/moises-menezesdev)** 
+**[moises-menezesdev](https://github.com/moises-menezesdev)**  <br>
  *Integração da API de transcrição ao sistema, além de administrar o ambiente do Google Cloud Speech-to-Text.*
 
 

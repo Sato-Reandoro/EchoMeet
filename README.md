@@ -22,6 +22,9 @@ git clone https://github.com/Sato-Reandoro/echomeets.git
 
 # Acesse o diretório do projeto
 cd echomeets
+
+# Baixe todas as dependências necessárias do sistema com 
+pip install -r requirements.txt
 ```
 
 ## 🚀 Tecnologias

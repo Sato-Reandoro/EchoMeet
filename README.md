@@ -18,7 +18,7 @@ Neste repositório, você encontrará o back-end completo da aplicação, projet
 
 ```bash
 # Clone o repositório
-git clone https://github.com/SatoReandoro/echomeets.git
+git clone https://github.com/Sato-Reandoro/echomeets.git
 
 # Acesse o diretório do projeto
 cd echomeets

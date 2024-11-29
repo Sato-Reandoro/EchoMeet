@@ -41,11 +41,25 @@ def ler_conteudo_arquivo(caminho_arquivo: str) -> str:
     except Exception as e:
         return f"Erro ao ler o arquivo: {str(e)}"
 
-llm = ChatOpenAI(openai_api_key=chave_openai, temperature=0.9, model_name="gpt-3.5-turbo")
+llm = ChatOpenAI(openai_api_key=chave_openai, temperature=0.3, model_name="gpt-4")  
 
 async def gerar_resumo(texto: str) -> str:
-    mensagem = HumanMessage(content=f"Você é um assistente de IA projetado para analisar e resumir discussões de reuniões. Sua tarefa é revisar o texto abaixo e criar um resumo que capture os principais pontos discutidos, incluindo qualquer decisão e ação a ser tomada. Se não encontrar nenhum dado relevante, retorne apenas a mensagem 'Nenhum dado foi encontrado'. Crie o resumo no formato de texto em parágrafos usando a formatação em markdown:\n\n{texto}")
-    
+    mensagem = HumanMessage(content=f"""
+    Você é um assistente de IA especializado em análise de reuniões. Sua tarefa é revisar o texto fornecido e criar um resumo extremamente detalhado, sem deixar nenhuma informação importante de fora. Resuma cada aspecto mencionado no texto de forma abrangente. O texto pode ser longo, e você deve capturar todos os tópicos relevantes.
+
+    Formate o resumo em Markdown com as seguintes seções:
+
+    ## Resumo Detalhado
+    [Escreva um resumo exaustivo em parágrafos.]
+
+    ## Principais Tópicos
+    [Apresente uma lista com os principais pontos abordados.]
+
+    Texto da reunião:
+    {texto}
+    """)
+
+
     resposta = await asyncio.to_thread(llm.invoke, [mensagem])
     return resposta.content
 

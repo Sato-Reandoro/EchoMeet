@@ -1,9 +1,7 @@
 import asyncio
 import os
 import re
-import subprocess
 from pathlib import Path
-import aiofiles
 from fastapi import FastAPI, Request, UploadFile, HTTPException
 from google.cloud import speech
 from pydub import AudioSegment  # Para manipulação de áudio

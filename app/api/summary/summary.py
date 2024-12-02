@@ -45,23 +45,36 @@ llm = ChatOpenAI(openai_api_key=chave_openai, temperature=0.3, model_name="gpt-4
 
 async def gerar_resumo(texto: str) -> str:
     mensagem = HumanMessage(content=f"""
-    Você é um assistente de IA especializado em análise de reuniões. Sua tarefa é revisar o texto fornecido e criar um resumo extremamente detalhado, sem deixar nenhuma informação importante de fora. Resuma cada aspecto mencionado no texto de forma abrangente. O texto pode ser longo, e você deve capturar todos os tópicos relevantes.
+    Você é um assistente de IA especializado em análise de reuniões. Sua tarefa é revisar o texto fornecido e criar uma ata detalhada e organizada, focando nos pontos mais importantes discutidos. Certifique-se de identificar corretamente todos os falantes, diferenciando suas contribuições e removendo informações irrelevantes, como propagandas ou repetições desnecessárias.
 
-    Formate o resumo em Markdown com as seguintes seções:
+    Estruture a ata em Markdown com as seguintes seções:
 
-    ## Resumo Detalhado
-    [Escreva um resumo exaustivo em parágrafos.]
+    ## Ata Detalhada
+    - Para cada falante, resuma suas contribuições com clareza e evite redundâncias.
+    - Identifique todos os falantes presentes no texto, utilizando seus nomes se fornecidos ou atribuindo 'Falante X' quando o nome não for dado.
+    - Destaque os principais temas abordados por cada falante e organize suas falas de forma coerente.
 
-    ## Principais Tópicos
-    [Apresente uma lista com os principais pontos abordados.]
+    ## Observações Gerais
+    - Capture aprendizados ou reflexões gerais sobre a reunião.
+    - Exclua informações irrelevantes, como propagandas ou trechos fora de contexto.
+
+    ## Decisões e Ações Futuras
+    - Liste quaisquer decisões tomadas ou ações recomendadas.
+    - Se nenhuma decisão foi mencionada, ofereça sugestões de seguimento com base nos tópicos discutidos.
+
+    Diretrizes:
+    - Ignore repetições no texto original.
+    - Explique os pontos principais de forma detalhada, mas concisa.
+    - Foque em fornecer informações claras e objetivas que ajudem na continuidade do trabalho.
 
     Texto da reunião:
     {texto}
     """)
 
-
     resposta = await asyncio.to_thread(llm.invoke, [mensagem])
     return resposta.content
+
+
 
 def identificar_dados(texto: str):
     if not texto.strip():

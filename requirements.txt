@@ -23,6 +23,7 @@ google-api-core==2.21.0
 google-auth==2.35.0
 google-cloud-core==2.4.1
 google-cloud-speech==2.27.0
+google-cloud-speech
 google-cloud-storage==2.18.2
 google-crc32c==1.6.0
 google-resumable-media==2.7.2

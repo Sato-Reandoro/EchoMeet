@@ -7,15 +7,16 @@ from app.models.models_summary import Summary
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage
 import asyncio
+from langchain_community.chat_models import ChatMaritalk
 
 load_dotenv()
 chave_openai = os.getenv("OPENAI_API_KEY")
+chave_maritacas = os.getenv("MARITACAS_API_KEY")
 
 def concatenar_nome_arquivo(nome_grupo: str, nome_audio: str) -> str:
     """Concatena o nome do grupo e do áudio para formar o nome do arquivo."""
-    # Garantir que a extensão .txt seja adicionada apenas uma vez
-    nome_audio = nome_audio.rstrip('.txt')  # Remove .txt se estiver presente
-    return f"{nome_grupo}_{nome_audio}.txt" 
+    nome_audio = nome_audio.rstrip('.txt')
+    return f"{nome_grupo}_{nome_audio}.txt"
 
 def construir_caminho_arquivo(nome_arquivo: str, pasta: str = "..\transcription\pasta_de_transcrições") -> str:
     return os.path.join(pasta, nome_arquivo)
@@ -41,27 +42,65 @@ def ler_conteudo_arquivo(caminho_arquivo: str) -> str:
     except Exception as e:
         return f"Erro ao ler o arquivo: {str(e)}"
 
-llm = ChatOpenAI(openai_api_key=chave_openai, temperature=0.3, model_name="gpt-4")  
+llm = ChatMaritalk(
+    model="sabia-3", api_key=chave_maritacas, temperature=0.3,
+)
 
-async def gerar_resumo(texto: str) -> str:
+async def gerar_introducao(texto: str) -> str:
     mensagem = HumanMessage(content=f"""
-    Você é um assistente de IA especializado em análise de reuniões. Sua tarefa é revisar o texto fornecido e criar um resumo extremamente detalhado, sem deixar nenhuma informação importante de fora. Resuma cada aspecto mencionado no texto de forma abrangente. O texto pode ser longo, e você deve capturar todos os tópicos relevantes.
-
-    Formate o resumo em Markdown com as seguintes seções:
-
-    ## Resumo Detalhado
-    [Escreva um resumo exaustivo em parágrafos.]
-
-    ## Principais Tópicos
-    [Apresente uma lista com os principais pontos abordados.]
+    Você é um assistente de IA especializado em análise de reuniões. Sua tarefa é revisar o texto fornecido e criar uma introdução detalhada para o resumo da reunião. A introdução deve contextualizar a reunião, destacando os principais objetivos e participantes.
 
     Texto da reunião:
     {texto}
     """)
-
-
     resposta = await asyncio.to_thread(llm.invoke, [mensagem])
     return resposta.content
+
+async def gerar_desenvolvimento(texto: str, introducao: str) -> str:
+    mensagem = HumanMessage(content=f"""
+    Você é um assistente de IA especializado em análise de reuniões. Com base na introdução fornecida e no texto da reunião, crie uma seção de desenvolvimento detalhada. Esta seção deve cobrir os principais tópicos discutidos, decisões tomadas e ações propostas.
+
+    Introdução:
+    {introducao}
+
+    Texto da reunião:
+    {texto}
+    """)
+    resposta = await asyncio.to_thread(llm.invoke, [mensagem])
+    return resposta.content
+
+async def gerar_conclusao(texto: str, introducao: str,  desenvolvimento: str) -> str:
+    mensagem = HumanMessage(content=f"""
+    Você é um assistente de IA especializado em análise de reuniões. Com base na introdução e no desenvolvimento fornecidos, crie uma conclusão para o resumo da reunião. A conclusão deve resumir os principais pontos discutidos, destacar as próximas etapas e encerrar a reunião de forma clara.
+
+    Introdução:
+    {introducao}
+
+    Desenvolvimento:
+    {desenvolvimento}
+
+    Texto da reunião:
+    {texto}
+    """)
+    resposta = await asyncio.to_thread(llm.invoke, [mensagem])
+    return resposta.content
+
+async def gerar_resumo_completo(texto: str) -> str:
+    introducao = await gerar_introducao(texto)
+    desenvolvimento = await gerar_desenvolvimento(texto, introducao)
+    conclusao = await gerar_conclusao(texto, introducao, desenvolvimento)
+    
+    resumo_completo = f"""
+    ## Introdução
+    {introducao}
+    
+    ## Desenvolvimento
+    {desenvolvimento}
+
+    ## Conclusão
+    {conclusao}
+    """
+    return resumo_completo
 
 def identificar_dados(texto: str):
     if not texto.strip():
@@ -131,8 +170,6 @@ def salvar_no_banco(novo_resumo: Summary, db: Session) -> Summary:
     db.refresh(novo_resumo)
     return novo_resumo
 
-
-
 async def salvar_resumo_no_banco(db: Session, nome: str, user_id: int, meeting_name: str, pasta: str = "D:/programação/github/EchoMeet/app/api/transcription/pasta_de_transcrições"):
     nome_grupo, nome_audio = nome.split(' ', 1)  # Divide o nome em grupo e áudio
     nome_completo = concatenar_nome_arquivo(nome_grupo, nome_audio)
@@ -146,7 +183,7 @@ async def salvar_resumo_no_banco(db: Session, nome: str, user_id: int, meeting_n
         return {"erro": caminho_arquivo}  # Retorna um dicionário com o erro
 
     conteudo_txt = ler_conteudo_arquivo(caminho_arquivo)
-    resumo_gerado = await gerar_resumo(conteudo_txt)  # Aguarda a geração do resumo
+    resumo_gerado = await gerar_resumo_completo(conteudo_txt)  # Usa a nova função para gerar o resumo completo
     dados_dashboard = identificar_dados(conteudo_txt)  # Alteração aqui: agora usa o texto original
     dados_dashboard_sem_duplicatas = remover_duplicatas(dados_dashboard)
     dados_dashboard_json = json.dumps(dados_dashboard_sem_duplicatas)

@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.api.crud import crud_user
 from app.api.summary.dashboards import generate_dashboard_by_type, generate_dashboards_for_metrics, get_dashboard_options 
-from app.api.summary.summary import gerar_resumo, identificar_dados, ler_conteudo_arquivo, remover_duplicatas, salvar_no_banco
+from app.api.summary.summary import gerar_resumo_completo, identificar_dados, ler_conteudo_arquivo, remover_duplicatas, salvar_no_banco
 from app.api.transcription.transcription import TEMP_DIRECTORY, TRANSCRIPTION_DIRECTORY,  processar_audio
 from app.database.connection import SessionLocal, get_db, init_db
 from app.models import models_user
@@ -43,8 +43,7 @@ async def add_cookie_settings(request: Request, call_next):
     response.set_cookie(
         key="example_cookie",
         value="cookie_value",
-        samesite="None",  # Define o SameSite como None
-        secure=True       # Define Secure como True
+        samesite="None",  # Define o SameSite como None       secure=True       # Define Secure como True
     )
     
     return response
@@ -298,7 +297,7 @@ async def transcricao_resumo(
         raise HTTPException(status_code=404, detail=conteudo_transcricao)
 
     # Gera o resumo a partir da transcrição
-    resumo_gerado = await gerar_resumo(conteudo_transcricao)
+    resumo_gerado = await gerar_resumo_completo(conteudo_transcricao)
 
     # Identifica dados relevantes no texto da transcrição para o dashboard
     dados_dashboard = identificar_dados(conteudo_transcricao)

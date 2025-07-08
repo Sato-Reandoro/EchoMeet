@@ -93,6 +93,7 @@ async def processar_audio(request: Request, nome_grupo: str, db: Session, user_i
     # Mantém o nome original do arquivo
     audio_filename = audio_file.filename
     audio_path = os.path.join(TEMP_DIRECTORY, audio_filename)
+    audio_convertido_path = None  # <-- Inicialize aqui!
 
     try:
         # Salva o arquivo de áudio
@@ -122,6 +123,9 @@ async def processar_audio(request: Request, nome_grupo: str, db: Session, user_i
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro inesperado: {str(e)}")
     finally:
-        # Remove os arquivos temporários
-        remover_arquivo_temporario(audio_path)
-        remover_arquivo_temporario(audio_convertido_path)
+        # Remove os arquivos temporários se existirem
+        if audio_path and os.path.exists(audio_path):
+            remover_arquivo_temporario(audio_path)
+        if audio_convertido_path and os.path.exists(audio_convertido_path):
+            remover_arquivo_temporario(audio_convertido_path)
+

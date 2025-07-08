@@ -86,3 +86,5 @@ tzdata==2024.2
 urllib3==2.2.3
 uvicorn==0.31.0
 yarl==1.14.0
+langchain-community
+openai-whisper

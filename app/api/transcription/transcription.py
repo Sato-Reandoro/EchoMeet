@@ -102,7 +102,7 @@ async def processar_audio(request: Request, nome_grupo: str, db: Session, user_i
 
         # Verifica o tamanho do arquivo
         tamanho = verificar_tamanho_arquivo(audio_path)
-        limite_tamanho_mb = 100  # Define o limite de tamanho em MB
+        limite_tamanho_mb = 1024  # Define o limite de tamanho em MB
         if tamanho > limite_tamanho_mb * 1024 * 1024:
             os.remove(audio_path)
             raise HTTPException(status_code=400, detail="Arquivo de áudio muito grande.")
